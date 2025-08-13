@@ -1,0 +1,195 @@
+import os
+import time
+import random
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.ensemble import IsolationForest
+import csv
+from fpdf import FPDF
+import streamlit as st
+
+# Try to import CoDrone_mini, but handle gracefully if not present for local testing
+try:
+    import CoDrone_mini
+except ImportError:
+    CoDrone_mini = None
+
+LOG_FILE = "flight_log.txt"
+TELEMETRY_FILE = "telemetry_log.txt"
+AUDIT_CSV = "audit_report.csv"
+AUDIT_PDF = "audit_report.pdf"
+
+# === Ensure log files exist at startup ===
+for filename in [LOG_FILE, TELEMETRY_FILE]:
+    if not os.path.exists(filename):
+        with open(filename, "w") as f:
+            f.write("")  # Create empty log file
+
+# === TELEMETRY SIMULATION ===
+def simulate_telemetry(n=50):
+    lat, lon, alt = 37.7749, -122.4194, 10.0
+    telemetry = []
+    for i in range(n):
+        anomaly = random.random() < 0.1
+        if anomaly:
+            lat += random.uniform(0.02, 0.06)
+            lon += random.uniform(0.02, 0.06)
+            alt += random.uniform(10, 100)
+        else:
+            lat += random.uniform(-0.001, 0.001)
+            lon += random.uniform(-0.001, 0.001)
+            alt += random.uniform(-0.5, 0.5)
+        telemetry.append([lat, lon, alt, anomaly])
+        # Write telemetry log
+        with open(TELEMETRY_FILE, "a") as f:
+            status = "ANOMALY" if anomaly else "NORMAL"
+            f.write(f"{time.ctime()},{lat},{lon},{alt},{status}\n")
+        # Write flight log for anomalies
+        if anomaly:
+            with open(LOG_FILE, "a") as flog:
+                flog.write(f"{time.ctime()}: ANOMALY detected at telemetry index {i} (Lat: {lat}, Lon: {lon}, Alt: {alt})\n")
+    return np.array(telemetry)
+
+# === REAL-TIME TELEMETRY PLOTTING ===
+def plot_telemetry(telemetry):
+    plt.figure(figsize=(10,4))
+    plt.subplot(1,2,1)
+    plt.scatter(range(len(telemetry)), telemetry[:,2], c=telemetry[:,3], cmap="coolwarm", label="Altitude")
+    plt.title("Altitude Drift Over Time")
+    plt.xlabel("Time")
+    plt.ylabel("Altitude")
+    plt.subplot(1,2,2)
+    plt.plot(telemetry[:,0], telemetry[:,1], label="GPS Path")
+    plt.title("GPS Path")
+    plt.xlabel("Latitude")
+    plt.ylabel("Longitude")
+    plt.tight_layout()
+    return plt
+
+# === ML ANOMALY DETECTION ===
+def ml_detect_anomalies(telemetry):
+    X = telemetry[:,:3]
+    clf = IsolationForest(contamination=0.1, random_state=42)
+    preds = clf.fit_predict(X)
+    anomalies = np.where(preds == -1)[0]
+    print(f"ML Detected {len(anomalies)} anomalies at indices: {anomalies}")
+    # Log detected anomalies to flight log
+    with open(LOG_FILE, "a") as f:
+        for idx in anomalies:
+            lat, lon, alt = telemetry[idx,0], telemetry[idx,1], telemetry[idx,2]
+            f.write(f"{time.ctime()}: ML anomaly detected at index {idx} (Lat: {lat}, Lon: {lon}, Alt: {alt})\n")
+    return anomalies
+
+# === EXPORT AUDIT REPORTS ===
+def export_to_csv(report):
+    with open(AUDIT_CSV, "w", newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["Timestamp", "Event"])
+        for entry in report:
+            writer.writerow(entry.split(":", 1))
+
+def export_to_pdf(report):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, "Threat Audit Report", ln=True, align="C")
+    for entry in report:
+        pdf.cell(0, 10, entry, ln=True)
+    pdf.output(AUDIT_PDF)
+
+# === WEB DASHBOARD (STREAMLIT) ===
+def run_dashboard(report, telemetry, anomalies, plot_fig, device_error=None):
+    st.title("Drone Cybersecurity Dashboard")
+    if device_error:
+        st.error(f"Drone connection error: {device_error}")
+    st.header("Threat Audit Report (flight_log.txt)")
+    for entry in report:
+        st.write(entry)
+    st.header("Telemetry Plot")
+    st.pyplot(plot_fig)
+    st.line_chart(pd.DataFrame(telemetry[:,:3], columns=["Latitude","Longitude","Altitude"]))
+    st.header("Anomalies Detected")
+    st.write(f"ML Detected {len(anomalies)} anomalies at indices: {anomalies}")
+    st.header("Telemetry Log (telemetry_log.txt)")
+    try:
+        with open(TELEMETRY_FILE, "r") as telefile:
+            for line in telefile.readlines()[-10:]:  # Show last 10 entries
+                st.text(line.strip())
+    except Exception as e:
+        st.warning(f"Could not read telemetry log: {e}")
+    if st.button("Export Audit to CSV"):
+        export_to_csv(report)
+        st.success("Audit exported to CSV!")
+    if st.button("Export Audit to PDF"):
+        export_to_pdf(report)
+        st.success("Audit exported to PDF!")
+
+# === MAIN ROUTINE ===
+def main():
+    drone = None
+    telemetry = None
+    plot_fig = None
+    anomalies = None
+    device_error = None
+    try:
+        if CoDrone_mini is not None:
+            try:
+                print(f"Connecting to port 'COM3'")
+                drone = CoDrone_mini.CoDrone()
+                drone.pair()
+                print(f"Connected to CoDrone Mini remote at port 'COM3'")
+                drone.takeoff()
+                # Log flight event
+                with open(LOG_FILE, "a") as flog:
+                    flog.write(f"{time.ctime()}: Drone takeoff successful.\n")
+            except Exception as e:
+                device_error = str(e)
+                print(f"device not found")
+                with open(LOG_FILE, "a") as flog:
+                    flog.write(f"{time.ctime()}: Drone connection error: {e}\n")
+        else:
+            print("CoDrone_mini module not available, running in simulation mode.")
+            with open(LOG_FILE, "a") as flog:
+                flog.write(f"{time.ctime()}: Simulation mode (no drone connected).\n")
+
+        telemetry = simulate_telemetry(n=100)
+        plot_fig = plot_telemetry(telemetry)
+        anomalies = ml_detect_anomalies(telemetry)
+
+        if drone is not None and hasattr(drone, "land"):
+            try:
+                drone.land()
+                with open(LOG_FILE, "a") as flog:
+                    flog.write(f"{time.ctime()}: Drone landing successful.\n")
+            except Exception as e:
+                print(f"Error during landing: {e}")
+                with open(LOG_FILE, "a") as flog:
+                    flog.write(f"{time.ctime()}: Drone landing error: {e}\n")
+        if drone is not None:
+            try:
+                drone.close()
+                with open(LOG_FILE, "a") as flog:
+                    flog.write(f"{time.ctime()}: Drone connection closed.\n")
+            except Exception as e:
+                print(f"Error closing drone connection: {e}")
+                with open(LOG_FILE, "a") as flog:
+                    flog.write(f"{time.ctime()}: Error closing drone connection: {e}\n")
+
+    except Exception as e:
+        print(f"Error: {e}")
+        with open(LOG_FILE, "a") as flog:
+            flog.write(f"{time.ctime()}: General error: {e}\n")
+    finally:
+        # === Graceful handling if log file is missing ===
+        try:
+            with open(LOG_FILE, "r") as f:
+                report = [line.strip() for line in f if line.strip()]
+        except FileNotFoundError:
+            report = []
+            print("No flight_log.txt found. No threats logged yet.")
+        run_dashboard(report, telemetry, anomalies, plot_fig, device_error)
+
+if __name__ == "__main__":
+    main()
+    os.system("streamlit run test.py")

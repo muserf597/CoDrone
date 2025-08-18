@@ -1,53 +1,322 @@
-Drone Cybersecurity Simulator
-A Python-based simulator for autonomous drone threat detection, response, and audit logging. Built for aviation safety, cybersecurity innovation, and STEM workforce development. Designed to be modular, NDAA-compliant, and extensible to real-world platforms.
+import os
+import sys
+import time
+import random
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.ensemble import IsolationForest
+import csv
+from fpdf import FPDF  # Ensure you're using fpdf2
+import streamlit as st
+import serial
+from typing import Optional  # ✅ Added for Optional[...] type hints
 
-Features
-Telemetry Simulation Generates realistic GPS and altitude data with injected anomalies
+# =============================
+# CONFIGURATION
+# =============================
+SIMULATION = True  # Set False to use the real drone
+ARDUINO_ENABLE = False  # Set True only if an Arduino is connected
+DRONE_TAKEOFF_ON_START = False  # Safety: take off only when you’re ready
 
-Machine Learning Anomaly Detection Uses Isolation Forest to identify suspicious flight behavior
+# Hardware ports (Windows examples)
+DRONE_PORT_HINT = "COM3"  # Not always used; CoDrone Mini often pairs via BLE
+ARDUINO_PORT = "COM4"  # Change to the actual Arduino port if ARDUINO_ENABLE=True
+ARDUINO_BAUD = 9600
 
-Adaptive Decision Engine Dynamically adjusts confidence thresholds based on historical feedback
+# Files
+DECISION_HISTORY_FILE = "decision_history.csv"
+LOG_FILE = "flight_log.txt"
+TELEMETRY_FILE = "telemetry_log.txt"
+AUDIT_CSV = "audit_report.csv"
+AUDIT_PDF = "audit_report.pdf"
 
-Streamlit Dashboard Visualizes telemetry, logs, and audit reports in real time
+# Random seed for reproducibility in simulation
+RANDOM_SEED = 42
+random.seed(RANDOM_SEED)
+np.random.seed(RANDOM_SEED)
 
-Audit Logging Logs anomalies and decisions to text, CSV, and PDF formats
+# =============================
+# Ensure log files exist
+# =============================
+for filename in [LOG_FILE, TELEMETRY_FILE, DECISION_HISTORY_FILE]:
+    if not os.path.exists(filename):
+        with open(filename, "w", newline="", encoding="utf-8") as f:
+            if filename == DECISION_HISTORY_FILE:
+                writer = csv.writer(f)
+                writer.writerow([
+                    "MissionID", "Timestamp", "Index", "Lat", "Lon", "Alt",
+                    "Confidence", "Trigger", "Outcome", "FeedbackSource"
+                ])
+            else:
+                f.write("")
 
-Arduino Trigger Integration Sends serial commands to external hardware (e.g., valves, alarms)
 
-Modular Design Easily extendable for BVLOS, Remote ID, or NDAA-compliant platforms
+# =============================
+# Dynamic threshold updater
+# =============================
+def update_threshold(history_file: str = DECISION_HISTORY_FILE, fallback: float = 0.7) -> float:
+    """Update decision threshold from human-approved history."""
+    try:
+        df = pd.read_csv(history_file)
+        if "Outcome" in df.columns and "Confidence" in df.columns:
+            correct = df[df["Outcome"].astype(str).str.lower() == "correct"]
+            if not correct.empty and correct["Confidence"].notna().any():
+                new_threshold = float(correct["Confidence"].mean())
+                new_threshold = float(np.clip(new_threshold, 0.05, 0.99))
+                print(f"✅ Updated threshold: {new_threshold:.2f}")
+                return new_threshold
+    except Exception as e:
+        print(f"Threshold update error: {e}")
+    return float(fallback)
 
-Requirements
-Python 3.8+
 
-numpy, pandas, matplotlib, scikit-learn, fpdf, streamlit
+# =============================
+# Try to import CoDrone_mini
+# =============================
+try:
+    import CoDrone_mini
+except Exception:
+    CoDrone_mini = None
 
-Optional: CoDrone_mini for hardware integration
 
-Optional: pyserial for Arduino support
+# =============================
+# Telemetry (real vs simulated)
+# =============================
+def simulate_telemetry(n: int = 50) -> np.ndarray:
+    """Simulate telemetry [lat, lon, alt, is_anomaly] with ~10% anomalies."""
+    lat, lon, alt = 37.7749, -122.4194, 10.0
+    telemetry = []
+    for i in range(n):
+        anomaly = random.random() < 0.10
+        if anomaly:
+            lat += random.uniform(0.02, 0.06)
+            lon += random.uniform(0.02, 0.06)
+            alt += random.uniform(10, 100)
+        else:
+            lat += random.uniform(-0.001, 0.001)
+            lon += random.uniform(-0.001, 0.001)
+            alt += random.uniform(-0.5, 0.5)
 
-Install dependencies:
+        telemetry.append([lat, lon, alt, int(anomaly)])
 
-bash
-pip install -r requirements.txt
-File Structure
-File	Purpose
-main.py	Entry point for simulation and dashboard
-decision_history.csv	Logs decisions with timestamp, confidence, and outcome
-flight_log.txt	Logs anomalies and hardware triggers
-telemetry_log.txt	Logs raw telemetry data
-audit_report.csv / audit_report.pdf	Exportable reports for review or compliance
-How It Works
-Simulates telemetry with injected anomalies
+        # Log telemetry to file
+        with open(TELEMETRY_FILE, "a", encoding="utf-8") as f:
+            status = "ANOMALY" if anomaly else "NORMAL"
+            f.write(f"{time.ctime()},{lat},{lon},{alt},{status}\n")
 
-Detects threats using Isolation Forest
+        # Log anomalies to flight log
+        if anomaly:
+            with open(LOG_FILE, "a", encoding="utf-8") as flog:
+                flog.write(
+                    f"{time.ctime()}: ANOMALY detected at telemetry index {i} "
+                    f"(Lat: {lat:.6f}, Lon: {lon:.6f}, Alt: {alt:.2f})\n"
+                )
 
-Logs decisions with adaptive thresholding
+    return np.array(telemetry, dtype=float)
 
-Sends hardware triggers via Arduino (optional)
 
-Displays everything in a real-time Streamlit dashboard
+# =============================
+# Plotting
+# =============================
+def plot_telemetry(telemetry: np.ndarray):
+    fig = plt.figure(figsize=(10, 4))
 
-Exports audit reports for post-flight review
+    # Altitude scatter
+    ax1 = fig.add_subplot(1, 2, 1)
+    ax1.scatter(range(len(telemetry)), telemetry[:, 2], c=telemetry[:, 3], cmap="coolwarm")
+    ax1.set_title("Altitude Drift Over Time")
+    ax1.set_xlabel("Index")
+    ax1.set_ylabel("Altitude (m)")
 
-Author
-MF — Aviation safety educator, Python innovator, and cybersecurity builder. Focused on autonomous systems, NDAA-compliant drone safety, and STEM workforce development.
+    # 2D GPS path
+    ax2 = fig.add_subplot(1, 2, 2)
+    ax2.plot(telemetry[:, 0], telemetry[:, 1])
+    ax2.set_title("GPS Path")
+    ax2.set_xlabel("Latitude")
+    ax2.set_ylabel("Longitude")
+
+    fig.tight_layout()
+    return fig
+
+
+# =============================
+# ML anomaly detection
+# =============================
+def ml_detect_anomalies(telemetry: np.ndarray) -> np.ndarray:
+    X = telemetry[:, :3]  # lat, lon, alt
+    clf = IsolationForest(contamination=0.10, random_state=42)
+    preds = clf.fit_predict(X)
+    anomalies = np.where(preds == -1)[0]
+
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        for idx in anomalies:
+            lat, lon, alt = X[idx]
+            f.write(
+                f"{time.ctime()}: ML anomaly detected at index {idx} "
+                f"(Lat: {lat:.6f}, Lon: {lon:.6f}, Alt: {alt:.2f})\n"
+            )
+
+    print(f"ML Detected {len(anomalies)} anomalies at indices: {anomalies}")
+    return anomalies
+
+
+# =============================
+# Decision engine
+# =============================
+def cybvolve_decision_engine(
+        telemetry: np.ndarray,
+        anomalies: np.ndarray,
+        mission_id: str = "001",
+        send_hardware: bool = False,
+) -> list:
+    threshold = update_threshold()
+    decisions = []
+
+    for idx in anomalies:
+        lat, lon, alt = telemetry[idx, 0], telemetry[idx, 1], telemetry[idx, 2]
+        confidence = float(min(1.0, abs(alt - 10.0) / 50.0))
+        trigger = bool(confidence > threshold)
+        rationale = (
+            f"Alt deviation: {abs(alt - 10.0):.2f}, "
+            f"Confidence: {confidence:.2f}, Threshold: {threshold:.2f}"
+        )
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        decision = {
+            "MissionID": mission_id,
+            "Timestamp": timestamp,
+            "Index": int(idx),
+            "Lat": float(lat),
+            "Lon": float(lon),
+            "Alt": float(alt),
+            "Confidence": confidence,
+            "Trigger": trigger,
+            "Outcome": "",
+            "FeedbackSource": "ML",
+        }
+        decisions.append(decision)
+
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{timestamp}: Cybvolve decision at index {idx} → Trigger: {trigger}, {rationale}\n")
+
+        with open(DECISION_HISTORY_FILE, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=[
+                    "MissionID", "Timestamp", "Index", "Lat", "Lon", "Alt",
+                    "Confidence", "Trigger", "Outcome", "FeedbackSource",
+                ],
+            )
+            writer.writerow(decision)
+
+        if send_hardware:
+            trigger_valve_serial(command=("TRIGGER" if trigger else "RESET"))
+
+    return decisions
+
+
+# =============================
+# Arduino trigger
+# =============================
+def trigger_valve_serial(port: str = ARDUINO_PORT, baudrate: int = ARDUINO_BAUD, command: str = "TRIGGER"):
+    try:
+        with serial.Serial(port, baudrate, timeout=2) as ser:
+            ser.write(f"{command}\n".encode())
+            print(f"Sent '{command}' to Arduino on {port}")
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(f"{time.ctime()}: Sent '{command}' to Arduino on {port}\n")
+    except Exception as e:
+        print(f"Error communicating with Arduino: {e}")
+
+
+# =============================
+# Streamlit Dashboard
+# =============================
+def run_dashboard():
+    try:
+        st.title("Drone Telemetry Dashboard")
+
+        # Show recent telemetry log (last 20 lines)
+        st.subheader("Recent Telemetry Log")
+        try:
+            if os.path.exists(TELEMETRY_FILE):
+                with open(TELEMETRY_FILE, "r", encoding="utf-8") as telefile:
+                    tail = telefile.readlines()[-20:]
+                    for line in tail:
+                        st.text(line.strip())
+            else:
+                st.info("No telemetry log yet.")
+        except Exception as e:
+            st.warning(f"Could not read telemetry log: {e}")
+
+        # Show recent flight log
+        st.subheader("Recent Flight Log")
+        try:
+            if os.path.exists(LOG_FILE):
+                with open(LOG_FILE, "r", encoding="utf-8") as log_file:
+                    log = log_file.readlines()[-20:]
+                    for entry in log:
+                        st.text(entry.strip())
+            else:
+                st.info("No flight logs yet.")
+        except Exception as e:
+            st.warning(f"Could not read flight log: {e}")
+
+        # Upload telemetry data and show anomaly results
+        st.subheader("Anomaly Detection")
+        telemetry = simulate_telemetry(50)  # Simulate telemetry
+        anomalies = ml_detect_anomalies(telemetry)
+        fig = plot_telemetry(telemetry)
+        st.pyplot(fig)
+
+        # Export options for logs
+        if st.button("Export Audit Report (CSV)"):
+            export_to_csv(telemetry)
+            st.success("CSV report exported!")
+        if st.button("Export Audit Report (PDF)"):
+            export_to_pdf(["Telemetry data exported as PDF."])
+            st.success("PDF report exported!")
+
+    except Exception as e:
+        st.error(f"Error running dashboard: {e}")
+
+
+# =============================
+# Export to CSV and PDF
+# =============================
+def export_to_csv(telemetry: np.ndarray):
+    try:
+        with open(AUDIT_CSV, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Lat", "Lon", "Alt", "Anomaly"])
+            for row in telemetry:
+                writer.writerow(row)
+        print(f"CSV report saved as {AUDIT_CSV}")
+    except Exception as e:
+        print(f"Error saving CSV: {e}")
+
+
+def export_to_pdf(report_lines: list):
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, "Telemetry Audit Report", ln=True, align="C")
+        for line in report_lines:
+            pdf.multi_cell(0, 8, line)
+        pdf.output(AUDIT_PDF)
+        print(f"PDF report saved as {AUDIT_PDF}")
+    except Exception as e:
+        print(f"Error saving PDF: {e}")
+
+
+# =============================
+# Main Entry Point
+# =============================
+if __name__ == "__main__":
+    if SIMULATION:
+        telemetry = simulate_telemetry(100)  # Simulated telemetry data
+        anomalies = ml_detect_anomalies(telemetry)
+        decisions = cybvolve_decision_engine(telemetry, anomalies)
+        run_dashboard()

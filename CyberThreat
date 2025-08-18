@@ -1,195 +1,53 @@
-import os
-import time
-import random
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.ensemble import IsolationForest
-import csv
-from fpdf import FPDF
-import streamlit as st
+Drone Cybersecurity Simulator
+A Python-based simulator for autonomous drone threat detection, response, and audit logging. Built for aviation safety, cybersecurity innovation, and STEM workforce development. Designed to be modular, NDAA-compliant, and extensible to real-world platforms.
 
-# Try to import CoDrone_mini, but handle gracefully if not present for local testing
-try:
-    import CoDrone_mini
-except ImportError:
-    CoDrone_mini = None
+Features
+Telemetry Simulation Generates realistic GPS and altitude data with injected anomalies
 
-LOG_FILE = "flight_log.txt"
-TELEMETRY_FILE = "telemetry_log.txt"
-AUDIT_CSV = "audit_report.csv"
-AUDIT_PDF = "audit_report.pdf"
+Machine Learning Anomaly Detection Uses Isolation Forest to identify suspicious flight behavior
 
-# === Ensure log files exist at startup ===
-for filename in [LOG_FILE, TELEMETRY_FILE]:
-    if not os.path.exists(filename):
-        with open(filename, "w") as f:
-            f.write("")  # Create empty log file
+Adaptive Decision Engine Dynamically adjusts confidence thresholds based on historical feedback
 
-# === TELEMETRY SIMULATION ===
-def simulate_telemetry(n=50):
-    lat, lon, alt = 37.7749, -122.4194, 10.0
-    telemetry = []
-    for i in range(n):
-        anomaly = random.random() < 0.1
-        if anomaly:
-            lat += random.uniform(0.02, 0.06)
-            lon += random.uniform(0.02, 0.06)
-            alt += random.uniform(10, 100)
-        else:
-            lat += random.uniform(-0.001, 0.001)
-            lon += random.uniform(-0.001, 0.001)
-            alt += random.uniform(-0.5, 0.5)
-        telemetry.append([lat, lon, alt, anomaly])
-        # Write telemetry log
-        with open(TELEMETRY_FILE, "a") as f:
-            status = "ANOMALY" if anomaly else "NORMAL"
-            f.write(f"{time.ctime()},{lat},{lon},{alt},{status}\n")
-        # Write flight log for anomalies
-        if anomaly:
-            with open(LOG_FILE, "a") as flog:
-                flog.write(f"{time.ctime()}: ANOMALY detected at telemetry index {i} (Lat: {lat}, Lon: {lon}, Alt: {alt})\n")
-    return np.array(telemetry)
+Streamlit Dashboard Visualizes telemetry, logs, and audit reports in real time
 
-# === REAL-TIME TELEMETRY PLOTTING ===
-def plot_telemetry(telemetry):
-    plt.figure(figsize=(10,4))
-    plt.subplot(1,2,1)
-    plt.scatter(range(len(telemetry)), telemetry[:,2], c=telemetry[:,3], cmap="coolwarm", label="Altitude")
-    plt.title("Altitude Drift Over Time")
-    plt.xlabel("Time")
-    plt.ylabel("Altitude")
-    plt.subplot(1,2,2)
-    plt.plot(telemetry[:,0], telemetry[:,1], label="GPS Path")
-    plt.title("GPS Path")
-    plt.xlabel("Latitude")
-    plt.ylabel("Longitude")
-    plt.tight_layout()
-    return plt
+Audit Logging Logs anomalies and decisions to text, CSV, and PDF formats
 
-# === ML ANOMALY DETECTION ===
-def ml_detect_anomalies(telemetry):
-    X = telemetry[:,:3]
-    clf = IsolationForest(contamination=0.1, random_state=42)
-    preds = clf.fit_predict(X)
-    anomalies = np.where(preds == -1)[0]
-    print(f"ML Detected {len(anomalies)} anomalies at indices: {anomalies}")
-    # Log detected anomalies to flight log
-    with open(LOG_FILE, "a") as f:
-        for idx in anomalies:
-            lat, lon, alt = telemetry[idx,0], telemetry[idx,1], telemetry[idx,2]
-            f.write(f"{time.ctime()}: ML anomaly detected at index {idx} (Lat: {lat}, Lon: {lon}, Alt: {alt})\n")
-    return anomalies
+Arduino Trigger Integration Sends serial commands to external hardware (e.g., valves, alarms)
 
-# === EXPORT AUDIT REPORTS ===
-def export_to_csv(report):
-    with open(AUDIT_CSV, "w", newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(["Timestamp", "Event"])
-        for entry in report:
-            writer.writerow(entry.split(":", 1))
+Modular Design Easily extendable for BVLOS, Remote ID, or NDAA-compliant platforms
 
-def export_to_pdf(report):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, "Threat Audit Report", ln=True, align="C")
-    for entry in report:
-        pdf.cell(0, 10, entry, ln=True)
-    pdf.output(AUDIT_PDF)
+Requirements
+Python 3.8+
 
-# === WEB DASHBOARD (STREAMLIT) ===
-def run_dashboard(report, telemetry, anomalies, plot_fig, device_error=None):
-    st.title("Drone Cybersecurity Dashboard")
-    if device_error:
-        st.error(f"Drone connection error: {device_error}")
-    st.header("Threat Audit Report (flight_log.txt)")
-    for entry in report:
-        st.write(entry)
-    st.header("Telemetry Plot")
-    st.pyplot(plot_fig)
-    st.line_chart(pd.DataFrame(telemetry[:,:3], columns=["Latitude","Longitude","Altitude"]))
-    st.header("Anomalies Detected")
-    st.write(f"ML Detected {len(anomalies)} anomalies at indices: {anomalies}")
-    st.header("Telemetry Log (telemetry_log.txt)")
-    try:
-        with open(TELEMETRY_FILE, "r") as telefile:
-            for line in telefile.readlines()[-10:]:  # Show last 10 entries
-                st.text(line.strip())
-    except Exception as e:
-        st.warning(f"Could not read telemetry log: {e}")
-    if st.button("Export Audit to CSV"):
-        export_to_csv(report)
-        st.success("Audit exported to CSV!")
-    if st.button("Export Audit to PDF"):
-        export_to_pdf(report)
-        st.success("Audit exported to PDF!")
+numpy, pandas, matplotlib, scikit-learn, fpdf, streamlit
 
-# === MAIN ROUTINE ===
-def main():
-    drone = None
-    telemetry = None
-    plot_fig = None
-    anomalies = None
-    device_error = None
-    try:
-        if CoDrone_mini is not None:
-            try:
-                print(f"Connecting to port 'COM3'")
-                drone = CoDrone_mini.CoDrone()
-                drone.pair()
-                print(f"Connected to CoDrone Mini remote at port 'COM3'")
-                drone.takeoff()
-                # Log flight event
-                with open(LOG_FILE, "a") as flog:
-                    flog.write(f"{time.ctime()}: Drone takeoff successful.\n")
-            except Exception as e:
-                device_error = str(e)
-                print(f"device not found")
-                with open(LOG_FILE, "a") as flog:
-                    flog.write(f"{time.ctime()}: Drone connection error: {e}\n")
-        else:
-            print("CoDrone_mini module not available, running in simulation mode.")
-            with open(LOG_FILE, "a") as flog:
-                flog.write(f"{time.ctime()}: Simulation mode (no drone connected).\n")
+Optional: CoDrone_mini for hardware integration
 
-        telemetry = simulate_telemetry(n=100)
-        plot_fig = plot_telemetry(telemetry)
-        anomalies = ml_detect_anomalies(telemetry)
+Optional: pyserial for Arduino support
 
-        if drone is not None and hasattr(drone, "land"):
-            try:
-                drone.land()
-                with open(LOG_FILE, "a") as flog:
-                    flog.write(f"{time.ctime()}: Drone landing successful.\n")
-            except Exception as e:
-                print(f"Error during landing: {e}")
-                with open(LOG_FILE, "a") as flog:
-                    flog.write(f"{time.ctime()}: Drone landing error: {e}\n")
-        if drone is not None:
-            try:
-                drone.close()
-                with open(LOG_FILE, "a") as flog:
-                    flog.write(f"{time.ctime()}: Drone connection closed.\n")
-            except Exception as e:
-                print(f"Error closing drone connection: {e}")
-                with open(LOG_FILE, "a") as flog:
-                    flog.write(f"{time.ctime()}: Error closing drone connection: {e}\n")
+Install dependencies:
 
-    except Exception as e:
-        print(f"Error: {e}")
-        with open(LOG_FILE, "a") as flog:
-            flog.write(f"{time.ctime()}: General error: {e}\n")
-    finally:
-        # === Graceful handling if log file is missing ===
-        try:
-            with open(LOG_FILE, "r") as f:
-                report = [line.strip() for line in f if line.strip()]
-        except FileNotFoundError:
-            report = []
-            print("No flight_log.txt found. No threats logged yet.")
-        run_dashboard(report, telemetry, anomalies, plot_fig, device_error)
+bash
+pip install -r requirements.txt
+File Structure
+File	Purpose
+main.py	Entry point for simulation and dashboard
+decision_history.csv	Logs decisions with timestamp, confidence, and outcome
+flight_log.txt	Logs anomalies and hardware triggers
+telemetry_log.txt	Logs raw telemetry data
+audit_report.csv / audit_report.pdf	Exportable reports for review or compliance
+How It Works
+Simulates telemetry with injected anomalies
 
-if __name__ == "__main__":
-    main()
-    os.system("streamlit run test.py")
+Detects threats using Isolation Forest
+
+Logs decisions with adaptive thresholding
+
+Sends hardware triggers via Arduino (optional)
+
+Displays everything in a real-time Streamlit dashboard
+
+Exports audit reports for post-flight review
+
+Author
+MF — Aviation safety educator, Python innovator, and cybersecurity builder. Focused on autonomous systems, NDAA-compliant drone safety, and STEM workforce development.

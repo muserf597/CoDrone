@@ -1,33 +1,53 @@
-# 🛡️ Drone Cybersecurity Simulator
+Drone Cybersecurity Simulator
+A Python-based simulator for autonomous drone threat detection, response, and audit logging. Built for aviation safety, cybersecurity innovation, and STEM workforce development. Designed to be modular, NDAA-compliant, and extensible to real-world platforms.
 
-This project simulates drone telemetry, detects anomalies using machine learning, and generates audit reports—all wrapped in a real-time Streamlit dashboard. Built for aviation safety, cybersecurity innovation, and STEM workforce development.
+Features
+Telemetry Simulation Generates realistic GPS and altitude data with injected anomalies
 
-## 🚀 Features
+Machine Learning Anomaly Detection Uses Isolation Forest to identify suspicious flight behavior
 
-- ✈️ **Telemetry Simulation**: Generates realistic GPS and altitude data with injected anomalies
-- 🧠 **ML Anomaly Detection**: Uses Isolation Forest to identify suspicious flight behavior
-- 📊 **Streamlit Dashboard**: Visualizes telemetry, logs, and audit reports in real time
-- 📝 **Audit Logging**: Logs anomalies and flight events to text, CSV, and PDF formats
-- 🧰 **Modular Design**: Easily extendable for BVLOS, Remote ID, or NDAA-compliant platforms
+Adaptive Decision Engine Dynamically adjusts confidence thresholds based on historical feedback
 
-## 📦 Requirements
+Streamlit Dashboard Visualizes telemetry, logs, and audit reports in real time
 
-- Python 3.8+
-- `numpy`, `pandas`, `matplotlib`, `scikit-learn`, `fpdf`, `streamlit`
-- Optional: `CoDrone_mini` for hardware integration
+Audit Logging Logs anomalies and decisions to text, CSV, and PDF formats
+
+Arduino Trigger Integration Sends serial commands to external hardware (e.g., valves, alarms)
+
+Modular Design Easily extendable for BVLOS, Remote ID, or NDAA-compliant platforms
+
+Requirements
+Python 3.8+
+
+numpy, pandas, matplotlib, scikit-learn, fpdf, streamlit
+
+Optional: CoDrone_mini for hardware integration
+
+Optional: pyserial for Arduino support
 
 Install dependencies:
-```bash
+
+bash
 pip install -r requirements.txt
-# Drone Cybersecurity Simulator
+File Structure
+File	Purpose
+main.py	Entry point for simulation and dashboard
+decision_history.csv	Logs decisions with timestamp, confidence, and outcome
+flight_log.txt	Logs anomalies and hardware triggers
+telemetry_log.txt	Logs raw telemetry data
+audit_report.csv / audit_report.pdf	Exportable reports for review or compliance
+How It Works
+Simulates telemetry with injected anomalies
 
-This project simulates drone telemetry, detects anomalies using machine learning, and generates audit reports. Built with Python, Streamlit, and Isolation Forest.
+Detects threats using Isolation Forest
 
-## Features
-- Real-time telemetry simulation
-- ML-based anomaly detection
-- Audit logging and export (CSV/PDF)
-- Streamlit dashboard
+Logs decisions with adaptive thresholding
 
-## Author
-MF — Aviation safety educator, Python innovator, and cybersecurity builder.
+Sends hardware triggers via Arduino (optional)
+
+Displays everything in a real-time Streamlit dashboard
+
+Exports audit reports for post-flight review
+
+Author
+MF — Aviation safety educator, Python innovator, and cybersecurity builder. Focused on autonomous systems, NDAA-compliant drone safety, and STEM workforce development.

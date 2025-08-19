@@ -10,7 +10,7 @@ import csv
 from fpdf import FPDF  # Ensure you're using fpdf2
 import streamlit as st
 import serial
-from typing import Optional  # ✅ Added for Optional[...] type hints
+from typing import Optional
 
 # =============================
 # CONFIGURATION

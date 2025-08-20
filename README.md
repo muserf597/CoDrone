@@ -37,6 +37,9 @@ flight_log.txt	Logs anomalies and hardware triggers
 telemetry_log.txt	Logs raw telemetry data
 audit_report.csv / audit_report.pdf	Exportable reports for review or compliance
 How It Works
+
+
+
 Simulates telemetry with injected anomalies
 Fri Aug 15 12:31:41 2025,37.773950021510444,-122.41984994136325,9.723210738148822,NORMAL
 Fri Aug 15 12:31:41 2025,37.77430342048529,-122.41906558222784,9.310149570778238,NORMAL
@@ -54,7 +57,12 @@ Fri Aug 15 12:31:41 2025,37.831358527516755,-122.34955748230462,102.285069556228
 
 Detects threats using Isolation Forest
 
+
+
 Logs decisions with adaptive thresholding
+
+
+
 MissionID	Timestamp	Index	Lat	Lon	Alt	Confidence	Trigger	Outcome	FeedbackSource
 1	8/15/2025 12:31	0	37.77395002	-122.4198499	9.723210738	0.005535785	FALSE		ML
 1	8/15/2025 12:31	1	37.77430342	-122.4190656	9.310149571	0.013797009	FALSE		ML
@@ -71,11 +79,16 @@ MissionID	Timestamp	Index	Lat	Lon	Alt	Confidence	Trigger	Outcome	FeedbackSource
 
 Sends hardware triggers via Arduino (optional)
 
+
 Displays everything in a real-time Streamlit dashboard
+
+
 <img width="1000" height="400" alt="Figure_1" src="https://github.com/user-attachments/assets/91ea509e-a225-417b-ae37-dea15554e630" />
 
 
 Exports audit reports for post-flight review
+
+
 Fri Aug 15 12:31:41 2025: ML anomaly detected at index 31 (Lat: 37.935784, Lon: -122.256117, Alt: 320.60)
 Fri Aug 15 12:31:41 2025: ML anomaly detected at index 33 (Lat: 37.937341, Lon: -122.257331, Alt: 320.15)
 Fri Aug 15 12:31:41 2025: ML anomaly detected at index 63 (Lat: 38.152811, Lon: -122.039548, Alt: 671.62)

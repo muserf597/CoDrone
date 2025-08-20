@@ -116,6 +116,7 @@ Fri Aug 15 12:31:42 2025: ML anomaly detected at index 26 (Lat: 37.848411, Lon: 
 Fri Aug 15 12:31:42 2025: ML anomaly detected at index 27 (Lat: 37.883575, Lon: -122.336542, Alt: 140.60)
 Fri Aug 15 12:31:42 2025: ML anomaly detected at index 30 (Lat: 37.882197, Lon: -122.336699, Alt: 141.25)
 
+https://doi.org/10.5281/zenodo.16914880
 
 Author
 MF — Aviation safety educator, Python innovator, and cybersecurity builder. Focused on autonomous systems, NDAA-compliant drone safety, and STEM workforce development.

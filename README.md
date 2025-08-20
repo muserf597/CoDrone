@@ -46,6 +46,8 @@ Logs decisions with adaptive thresholding
 Sends hardware triggers via Arduino (optional)
 
 Displays everything in a real-time Streamlit dashboard
+<img width="1000" height="400" alt="Figure_1" src="https://github.com/user-attachments/assets/91ea509e-a225-417b-ae37-dea15554e630" />
+
 
 Exports audit reports for post-flight review
 
